@@ -29,7 +29,6 @@
 ################################################################################
 
 from pathlib import Path
-from jsonrpc2 import JsonRpcApplication
 from wsgiref.simple_server import make_server
 import logging
 import sys
@@ -37,11 +36,12 @@ from os import mkdir
 
 from ApplicationServices import ApplicationServices
 from Cleaner import Cleaner
+from ExtendedJsonRpcApplication import ExtendedJsonRpcApplication
 
 SPOOL_DIRECTORY = '/tmp/aeroo-docs'
 
 
-def changeLogLevel(verbose: bool):
+def changeLogLevel(verbose: bool, client_id: str):
     logging.getLogger('main').setLevel(
         logging.DEBUG if verbose else logging.INFO)
     return {'rta': 'changed'}
@@ -78,7 +78,7 @@ def main():
         'log': changeLogLevel
     }
 
-    app = JsonRpcApplication(rpcs=interfaces)
+    app = ExtendedJsonRpcApplication(rpcs=interfaces)
     try:
         httpd = make_server("0.0.0.0", 8989, app)
     except OSError as e:

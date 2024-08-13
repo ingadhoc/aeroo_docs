@@ -29,7 +29,7 @@
 
 import base64
 from hashlib import md5
-import hashlib
+import json
 import logging
 from pathlib import Path
 from random import randint
@@ -120,13 +120,13 @@ class ApplicationServices():
                          (ident, self._chktime(start_time)))
             yield data
 
-    def upload(self, data=False, is_last=False, identifier=False, username=None, password=None):
+    def upload(self, data=False, is_last=False, identifier=False, username=None, password=None, client_id='Unknown'):
         logger = logging.getLogger('main')
-        logger.debug('Upload identifier: %s' % identifier)
+        logger.debug('Upload identifier: %s from %s' % (identifier, client_id))
         try:
             start_time = time()
             # NOTE:md5 conversion on file operations to prevent path injection attack
-            if identifier and not path.isfile(self.spool_path % '_'+self._md5(str(identifier))):
+            if identifier and not path.isfile(self.spool_path % '_' + self._md5(str(identifier))):
                 raise NoidentException('Wrong or no identifier.')
             elif data is False:
                 raise NodataException('No data to be converted.')
@@ -166,15 +166,15 @@ class ApplicationServices():
             traceback.print_exception(
                 exceptionType, exceptionValue, exceptionTraceback, limit=2, file=sys.stdout)
 
-    def convert(self, data=False, identifier=False, in_mime=False, out_mime=False, username=None, password=None):
+    def convert(self, data=False, identifier=False, in_mime=False, out_mime=False, username=None, password=None, client_id='Unknown'):
         logger = logging.getLogger('main')
         start_time = time()
 
         if data is not False:
             data = base64.b64decode(data)
-            logger.debug('Openning file: ')
+            logger.debug('Openning file from %s : ' % client_id)
         elif identifier is not False:
-            logger.debug('Openning identifier: %s' % (identifier))
+            logger.debug('Openning identifier %s from %s :' % (identifier, client_id))
             data = self._readFile(identifier)
         else:
             raise NoidentException('Wrong or no identifier.')
@@ -207,7 +207,7 @@ class ApplicationServices():
 
         return base64.b64encode(conv_data).decode('utf8')
 
-    def join(self, idents, in_mime=False, out_mime=False, username=None, password=None):
+    def join(self, idents, in_mime=False, out_mime=False, username=None, password=None, client_id='Unknown'):
         logger = logging.getLogger('main')
         logger.debug('Join %s identifiers: %s' %
                      (str(len(idents)), str(idents)))
@@ -244,7 +244,7 @@ class ApplicationServices():
         logger.debug("  join finished %s" % self._chktime(start_time))
         return base64.b64encode(result_data).decode('utf8')
 
-    def test(self):
+    def test(self, client_id='Unknown'):
 
         localPath = Path(__file__).resolve().absolute().with_name('test.odt')
         with open(localPath, "rb") as tmpfile:
@@ -254,8 +254,7 @@ class ApplicationServices():
         # result = self.convert({'data': data, 'in_mime': 'odt', 'out_mime': 'pdf', 'client_info': 'self test'})[:128]
 
         # if count(conv_data) < 4 or conv_data[:4] != b'%PDF':
-        #     raise NodataException('')
         if 'JVBERi0xLjcKJcOkw7zDtsOfCjIgMCBvYmoKPDwvTGVuZ3RoIDMgMCBSL0ZpbHRlci9GbGF0ZURlY29kZT4+CnN0cmVhbQp4nC2NPwvCMBTE9/cpbnZI3otNk0Io2D+C' == result:
             return {'status': 'ok', 'dig': result[:128]}
 
-        raise Exception('Malformed')
+        raise Exception('Convertion failed')

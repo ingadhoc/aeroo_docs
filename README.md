@@ -31,6 +31,6 @@ libreoffice24.2 \
 ## Build and upload
 
 ```sh
-docker build -t adhoc/aeroo-docs:9.0 -f docker/p.dockerfile .
-docker push adhoc/aeroo-docs:9.0
+docker build -t adhoc/aeroo-docs:9.1 -f docker/p.dockerfile .
+docker push adhoc/aeroo-docs:9.1
 ```
