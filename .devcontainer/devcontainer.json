@@ -1,0 +1,62 @@
+{
+	"name": "Python 3",
+	"dockerComposeFile": "docker-compose.yml",
+    "service": "dev_adhoc_doc",
+    "workspaceFolder": "/app",
+	"initializeCommand": [ "docker", "rm", "-f", "dev_adhoc_doc"],
+	"shutdownAction": "stopCompose",
+
+	"customizations": {
+        "vscode": {
+            "settings": {
+
+                    "cSpell.language": "en,es",
+                    "files.exclude": {
+                        "**/*.code-search": true,
+                        ".devcontainer": true,
+                        "docker": true,
+                        "*.Dockerfile.dockerignore": true
+                    },
+                    "search.exclude":{
+                        "**/*.code-search": true,
+                        ".devcontainer": true,
+                        "docker": true,
+                        "*.Dockerfile.dockerignore": true
+                    },
+
+                    "python.defaultInterpreterPath": "/opt/libreoffice24.2/program/python",
+                    "python.pipenvPath": "/opt/libreoffice24.2/program/python-core-3.8.19/bin",
+                    "python.pythonPath": "/opt/libreoffice24.2/program/python",
+                    "python.languageServer": "Pylance",
+                    "python.linting.enabled": true,
+                    "python.linting.pylintEnabled": true,
+                    // "python.linting.pylintPath": "/usr/local/bin/pylint",
+                    "python.analysis.inlayHints.callArgumentNames": "all",
+                    "python.analysis.inlayHints.functionReturnTypes": true,
+                    "python.analysis.inlayHints.variableTypes": true,
+                    "python.analysis.inlayHints.pytestParameters": true,
+                    "python.analysis.regenerateStdLibIndices": true,
+                    "python.analysis.autoFormatStrings": true,
+                    "autopep8.args": [
+                        "--max-line-length=120"
+                    ],
+                    "[python]": {
+                        "editor.defaultFormatter": "ms-python.autopep8",
+                        "editor.codeActionsOnSave": {
+                            "source.organizeImports.ruff": "explicit"
+                        },
+                        "editor.formatOnSave": true
+                    }
+                },
+
+                // Add the IDs of extensions you want installed when the container is created.
+                "extensions": [
+					"ms-python.python",
+					"shardulm94.trailing-spaces",
+					"ms-python.autopep8"
+				]
+            }
+        },
+
+	"remoteUser": "appuser"
+}

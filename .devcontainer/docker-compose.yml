@@ -1,0 +1,21 @@
+services:
+  dev_adhoc_doc:
+    build:
+      no_cache: false
+      dockerfile: docker/d.dockerfile
+      context: ../
+    container_name: dev_adhoc_doc
+    hostname: dev_adhoc_doc
+    env_file:
+      - .env
+    environment:
+      - CONTAINER_NAME=dev_adhoc_doc
+    volumes:
+      - ../:/app/
+    networks:
+      adhoc:
+
+networks:
+  adhoc:
+    external: true
+    name: adhoc-17
