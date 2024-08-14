@@ -1,0 +1,14 @@
+{
+    "python.defaultInterpreterPath": "/opt/libreoffice24.2/program/python",
+    "python.pipenvPath": "/opt/libreoffice24.2/program/python-core-3.8.19/bin",
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.autopep8",
+        "editor.codeActionsOnSave": {
+            "source.organizeImports.ruff": "explicit"
+        },
+        "editor.formatOnSave": true
+    },
+    "autopep8.args": [
+        "--max-line-length=120"
+    ]
+}
