@@ -138,11 +138,13 @@ class StarOfficeClient:
             self._connectOffice()
             self._createDesktop()
         inputStream = self._initStream(data)
-        properties = {'InputStream': inputStream}
+        properties = {}
+        properties.update({'InputStream': inputStream})
         properties.update({'Hidden': True})
         properties.update({'UpdateDocMode': UpdateDocMode.QUIET_UPDATE})
         properties.update({'ReadOnly': read_only})
         properties.update({'MacroExecutionMode': MacroExecMode.NEVER_EXECUTE})
+        properties.update({'RepairPackage': True})
 
         # TODO Minor performance improvement by supplying MediaType property
         # properties.update({'MediaType':'application/vnd.oasis.opendocument.text'})
@@ -185,7 +187,6 @@ class StarOfficeClient:
             properties.update({"FilterOptions": CSVFilterOptions})
         props = self._toProperties(**properties)
         try:
-            # url = uno.systemPathToFileUrl(path) #when storing to filesystem
             self.document.storeToURL('private:stream', props)
         except Exception as exception:
             exceptionType, exceptionValue, exceptionTraceback = sys.exc_info()

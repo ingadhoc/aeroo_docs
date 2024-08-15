@@ -28,14 +28,17 @@
 ################################################################################
 
 import base64
+from datetime import datetime
 from hashlib import md5
-import json
+import io
 import logging
 from pathlib import Path
 from random import randint
 from time import sleep, time
 from os import path, rename
+import zipfile
 from StarOfficeClient import StarOfficeClient, StarOfficeClientException
+from utils import convert_size
 
 MAXINT = 9223372036854775807
 
@@ -65,24 +68,26 @@ class AccessException(Exception):
     pass
 
 
-class ApplicationServices():
+class AerooServices():
 
-    spool_path = "/tmp/aeroo-docs/%s"
+    spool_path: str = "/tmp/aeroo-docs/%s"
     star_office_client = None
+    soffice_restart_cmd = None
 
-    def __init__(self, spool_directory: str):
+    def __init__(self, spool_directory: str, soffice_restart_cmd=None):
         self._init_conn()
         self.spool_path = spool_directory + "/%s"
+        self.soffice_restart_cmd = soffice_restart_cmd
 
     def _init_conn(self) -> None:
         logger = logging.getLogger('main')
         try:
-            self.star_office_client = StarOfficeClient()
+            self.star_office_client = StarOfficeClient(ooo_restart_cmd=self.soffice_restart_cmd)
         except StarOfficeClientException as e:
             self.star_office_client = None
             logger.warning("Failed to initiate LibreOffice connection.")
 
-    def _md5(self, data) -> str:
+    def _md5(self, data: str) -> str:
         return md5(data.encode()).hexdigest()
 
     def _conn_healthy(self) -> bool:
@@ -103,7 +108,7 @@ class ApplicationServices():
         logger.warning(message)
         raise NoOfficeConnection(message)
 
-    def _chktime(self, start_time):
+    def _chktime(self, start_time: float):
         return '%s s' % str(round(time()-start_time, 6))
 
     def _readFile(self, ident):
@@ -169,6 +174,7 @@ class ApplicationServices():
     def convert(self, data=False, identifier=False, in_mime=False, out_mime=False, username=None, password=None, client_id='Unknown'):
         logger = logging.getLogger('main')
         start_time = time()
+        logger.debug('Convert File Solicitation from %s at %s: ' % (client_id, datetime.now()))
 
         if data is not False:
             data = base64.b64decode(data)
@@ -179,11 +185,19 @@ class ApplicationServices():
         else:
             raise NoidentException('Wrong or no identifier.')
 
-        logger.debug("  read file %s" % self._chktime(start_time))
+        logger.debug("  read file %s len %s" % (self._chktime(start_time), convert_size(len(data))))
+
+        # Avoid to handle files with too many images.
+        inzip = zipfile.ZipFile(io.BytesIO(data), "r")
+        if len(inzip.namelist()) > 2175:
+            raise Exception('File with too many images')
+        inzip = None
+
         self._conn_healthy()
         logger.debug("  connection test ok %s" % self._chktime(start_time))
         infilter = filters.get(in_mime, False)
         outfilter = filters.get(out_mime, False)
+
         self.star_office_client.putDocument(
             data, filter_name=infilter, read_only=True)
         logger.debug("  upload document to office %s" %
@@ -244,17 +258,13 @@ class ApplicationServices():
         logger.debug("  join finished %s" % self._chktime(start_time))
         return base64.b64encode(result_data).decode('utf8')
 
-    def test(self, client_id='Unknown'):
-
+    def test(self):
         localPath = Path(__file__).resolve().absolute().with_name('test.odt')
         with open(localPath, "rb") as tmpfile:
             data = base64.b64encode(tmpfile.read()).decode('utf-8')
 
-        result = self.convert(data, in_mime='odt', out_mime='pdf')[:128]
-        # result = self.convert({'data': data, 'in_mime': 'odt', 'out_mime': 'pdf', 'client_info': 'self test'})[:128]
-
-        # if count(conv_data) < 4 or conv_data[:4] != b'%PDF':
-        if 'JVBERi0xLjcKJcOkw7zDtsOfCjIgMCBvYmoKPDwvTGVuZ3RoIDMgMCBSL0ZpbHRlci9GbGF0ZURlY29kZT4+CnN0cmVhbQp4nC2NPwvCMBTE9/cpbnZI3otNk0Io2D+C' == result:
+        result = self.convert(data, in_mime='odt', out_mime='pdf')[:4]
+        if 'JVBE' == result:  # b'%PDF' Check for magick words
             return {'status': 'ok', 'dig': result[:128]}
 
         raise Exception('Convertion failed')

@@ -46,6 +46,9 @@ RUN apt-get update \
         ssh-client \
         nano \
         gnupg2 \
+        # Execute
+        cpulimit \
+        procps \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && /opt/libreoffice24.2/program/python -m pip install --no-cache-dir  types-unopy
