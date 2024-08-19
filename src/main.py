@@ -70,7 +70,8 @@ def main():
         cleaner.start()
 
     try:
-        aerooServices = AerooServices(spool_directory=SPOOL_DIRECTORY)
+        aerooServices = AerooServices(spool_directory=SPOOL_DIRECTORY,
+                                      soffice_restart_cmd="/usr/local/bin/officeLauncher.sh")
     except Exception as e:
         logger.error('failed to create the ApplicationServices ')
         logger.error(str(e))
