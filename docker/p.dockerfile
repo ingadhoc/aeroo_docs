@@ -29,16 +29,25 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /tmp/*
 
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y -q \
+        psmisc \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 RUN adduser -u 1000 --disabled-password --gecos "" appuser  \
     && chown -R appuser /app
+
+COPY docker/entrypoint.sh /usr/local/bin/
+COPY docker/officeLauncher.sh /usr/local/bin/
 
 USER appuser
 
 RUN mkdir -p /tmp/aeroo-docs
 
 COPY src/* .
-COPY docker/entrypoint.sh .
+COPY docker/*.sh /usr/local/bin/
 
-ENTRYPOINT ["/app/entrypoint.sh"]
+ENTRYPOINT ["entrypoint.sh"]

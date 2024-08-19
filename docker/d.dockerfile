@@ -46,6 +46,10 @@ RUN apt-get update \
         ssh-client \
         nano \
         gnupg2 \
+        # Execute
+        cpulimit \
+        procps \
+        psmisc \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && /opt/libreoffice24.2/program/python -m pip install --no-cache-dir  types-unopy
@@ -58,6 +62,9 @@ RUN adduser -u 1000 --disabled-password --gecos "" appuser  \
     && chown -R appuser /app \
     && echo "appuser     ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/appuser \
     && chmod 0440 /etc/sudoers.d/appuser
+
+COPY docker/entrypoint.sh /usr/local/bin/
+COPY docker/officeLauncher.sh /usr/local/bin/
 
 USER appuser
 

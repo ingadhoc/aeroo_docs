@@ -1,14 +1,5 @@
 #!/bin/bash
 
-# Iniciar LibreOffice en segundo plano
-libreoffice24.2 \
-    --invisible \
-    --norestore \
-    --headless \
-    --nologo \
-    --nofirststartwizard \
-    --accept="socket,host=localhost,port=2002;urp;StarOffice.ServiceManager" &
-
 # Iniciar el script de Python
 /opt/libreoffice24.2/program/python /app/main.py &
 

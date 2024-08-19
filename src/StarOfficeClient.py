@@ -28,6 +28,9 @@ import time
 import traceback
 import sys
 from os.path import abspath
+
+from CallWithTimeout import ExecutorWithTimeout, TimeoutExeption
+
 DEFAULT_OPENOFFICE_PORT = 2002
 RESOLVESTR = "uno:socket,host=%s,port=%s;urp;StarOffice.ComponentContext"
 
@@ -138,11 +141,13 @@ class StarOfficeClient:
             self._connectOffice()
             self._createDesktop()
         inputStream = self._initStream(data)
-        properties = {'InputStream': inputStream}
+        properties = {}
+        properties.update({'InputStream': inputStream})
         properties.update({'Hidden': True})
         properties.update({'UpdateDocMode': UpdateDocMode.QUIET_UPDATE})
         properties.update({'ReadOnly': read_only})
         properties.update({'MacroExecutionMode': MacroExecMode.NEVER_EXECUTE})
+        properties.update({'RepairPackage': True})
 
         # TODO Minor performance improvement by supplying MediaType property
         # properties.update({'MediaType':'application/vnd.oasis.opendocument.text'})
@@ -151,16 +156,20 @@ class StarOfficeClient:
             properties.update({'FilterName': filter_name})
         props = self._toProperties(**properties)
         try:
-            self.document = self.desktop.loadComponentFromURL(
-                'private:stream', '_blank', 0, props)
-        except DisposedException as e:
+            self.document = self.desktop.loadComponentFromURL('private:stream', '_blank', 0, props)
+        except DisposedException:
             #   When office unexpectedly crashed or has been restarted, we know
             # nothing about it, that is why we need to create new desktop or
             # even try to completely reconnect to new office socket. Then give
             # it another try.
+            time.sleep(15)
             self._createDesktop()
             self.putDocument(data, filter_name=filter_name,
                              read_only=read_only)
+        except TimeoutExeption:
+            inputStream.closeInput()
+            self._restart_ooo()
+            raise Exception('Operation too long')
         except Exception as e:
             exceptionType, exceptionValue, exceptionTraceback = sys.exc_info()
             traceback.print_exception(exceptionType, exceptionValue,
@@ -170,8 +179,11 @@ class StarOfficeClient:
     def closeDocument(self):
         if hasattr(self, 'document'):
             if self.document is not None:
-                self.document.close(True)
-                del self.document
+                try:
+                    self.document.close(True)
+                    del self.document
+                except DisposedException:
+                    pass
 
     def saveByStream(self, filter_name=None):
         """
@@ -185,8 +197,9 @@ class StarOfficeClient:
             properties.update({"FilterOptions": CSVFilterOptions})
         props = self._toProperties(**properties)
         try:
-            # url = uno.systemPathToFileUrl(path) #when storing to filesystem
             self.document.storeToURL('private:stream', props)
+        except DisposedException:
+            raise Exception('Office not available')
         except Exception as exception:
             exceptionType, exceptionValue, exceptionTraceback = sys.exc_info()
             traceback.print_exception(exceptionType, exceptionValue,
@@ -249,11 +262,34 @@ class StarOfficeClient:
                 # cursor.ParaStyleName = parastyle
                 self.document.Text.getEnd().insertDocumentFromURL('private:stream', props)
 
+            except DisposedException:
+                raise Exception('Office not available')
             except Exception as e:
                 print("Error inserting file %s bytes on the OpenOffice document: %s" % (
                     len(doc), e))
                 raise e
         self._updateDocument()
+
+    def testConnection(self) -> bool:
+        try:
+            if not hasattr(self, 'desktop'):
+                self._createDesktop()
+            elif self.desktop is None:
+                self._createDesktop()
+        except UnknownPropertyException:
+            self._connectOffice()
+            self._createDesktop()
+
+        try:
+            document = self.desktop.loadComponentFromURL("private:factory/swriter", '_default', 0, ())
+            document.close(True)
+            return True
+        except DisposedException:
+            self.logger.error(e)
+            return False
+        except Exception as e:
+            self.logger.warning(e)
+            return False
 
     def _connectOffice(self):
         self._context = self._resolver.resolve(
@@ -264,7 +300,7 @@ class StarOfficeClient:
             smanager = self._context.ServiceManager
             self.desktop = smanager.createInstanceWithContext(
                 "com.sun.star.frame.Desktop", self._context)
-        except UnknownPropertyException as e:
+        except (UnknownPropertyException, DisposedException):
             self._connectOffice()
             self._createDesktop()
 
@@ -313,13 +349,8 @@ class StarOfficeClient:
         try:
             self.logger.info('Executing restart script "%s"' %
                              self._ooo_restart_cmd)
-            retcode = subprocess.call(self._ooo_restart_cmd, shell=True)
-            if retcode == 0:
-                self.logger.warning('Restart successfull')
-                time.sleep(4)  # Let some time for LibO/OOO to be fully started
-            else:
-                self.logger.error(
-                    'Restart script failed with return code %d' % retcode)
+            subprocess.Popen(self._ooo_restart_cmd, start_new_session=True)
+            time.sleep(4)  # Let some time for LibO/OOO to be fully started
         except OSError as e:
             self.logger.error(
                 'Failed to execute the restart script. OS error: %s' % e)

@@ -28,9 +28,12 @@ libreoffice24.2 \
 [Frame](https://api.libreoffice.org/docs/idl/ref/namespacecom_1_1sun_1_1star_1_1frame.html)
 [Util](https://api.libreoffice.org/docs/idl/ref/namespacecom_1_1sun_1_1star_1_1util.html)
 
+[PDF Options](https://wiki.documentfoundation.org/Macros/Python_Guide/PDF_export_filter_data)
+[PDF Export](https://wiki.openoffice.org/wiki/API/Tutorials/PDF_export)
+
 ## Build and upload
 
 ```sh
-docker build -t adhoc/aeroo-docs:9.1 -f docker/p.dockerfile .
-docker push adhoc/aeroo-docs:9.1
+docker build -t adhoc/aeroo-docs:9.5 -f docker/p.dockerfile .
+docker push adhoc/aeroo-docs:9.5
 ```

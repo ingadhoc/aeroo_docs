@@ -28,14 +28,20 @@
 ################################################################################
 
 import base64
+from datetime import datetime
 from hashlib import md5
-import json
+import io
 import logging
 from pathlib import Path
 from random import randint
+import subprocess
 from time import sleep, time
 from os import path, rename
+import uuid
+import zipfile
+from CallWithTimeout import ExecutorWithTimeout, TimeoutExeption
 from StarOfficeClient import StarOfficeClient, StarOfficeClientException
+from utils import convert_size
 
 MAXINT = 9223372036854775807
 
@@ -65,45 +71,44 @@ class AccessException(Exception):
     pass
 
 
-class ApplicationServices():
+class AerooServices():
 
-    spool_path = "/tmp/aeroo-docs/%s"
+    spool_path: str = "/tmp/aeroo-docs/%s"
     star_office_client = None
+    soffice_restart_cmd = None
 
-    def __init__(self, spool_directory: str):
-        self._init_conn()
+    def __init__(self, spool_directory: str, soffice_restart_cmd=None):
         self.spool_path = spool_directory + "/%s"
+        self.soffice_restart_cmd = soffice_restart_cmd
 
-    def _init_conn(self) -> None:
-        logger = logging.getLogger('main')
+    def _init_conn(self):
         try:
-            self.star_office_client = StarOfficeClient()
+            return StarOfficeClient(ooo_restart_cmd=self.soffice_restart_cmd)
         except StarOfficeClientException as e:
-            self.star_office_client = None
+            logger = logging.getLogger('main')
             logger.warning("Failed to initiate LibreOffice connection.")
+            return None
 
-    def _md5(self, data) -> str:
+    def _md5(self, data: str) -> str:
         return md5(data.encode()).hexdigest()
 
-    def _conn_healthy(self) -> bool:
-
-        if self.star_office_client is not None:
-            return True
-
+    def _conn_healthy(self):
         logger = logging.getLogger('main')
         attempt = 0
-        while self.star_office_client is None and attempt < 3:
+        star_office_client = None
+        while star_office_client is None and attempt < 7:
             attempt += 1
-            self._init_conn()
-            if self.star_office_client is not None:
-                return True
-            sleep(3)
+            star_office_client = self._init_conn()
+            if star_office_client is not None:
+                logger.info("LibreOffice connection initialized.")
+                return star_office_client
+            sleep(10)
 
         message = 'Failed to initiate connection to LibreOffice three times in a row.'
         logger.warning(message)
         raise NoOfficeConnection(message)
 
-    def _chktime(self, start_time):
+    def _chktime(self, start_time: float):
         return '%s s' % str(round(time()-start_time, 6))
 
     def _readFile(self, ident):
@@ -121,8 +126,9 @@ class ApplicationServices():
             yield data
 
     def upload(self, data=False, is_last=False, identifier=False, username=None, password=None, client_id='Unknown'):
+        call_ref = str(uuid.uuid4()).replace("-", "")[:6]
         logger = logging.getLogger('main')
-        logger.debug('Upload identifier: %s from %s' % (identifier, client_id))
+        logger.debug('%s Upload identifier: %s from %s' % (call_ref, identifier, client_id))
         try:
             start_time = time()
             # NOTE:md5 conversion on file operations to prevent path injection attack
@@ -136,7 +142,7 @@ class ApplicationServices():
             while not identifier:
                 new_ident = randint(1, MAXINT)
                 fname = self._md5(str(new_ident))
-                logger.debug('  assigning new identifier %s' % new_ident)
+                logger.debug('%s  assigning new identifier %s' % (call_ref, new_ident))
                 # check if there is any other such files
                 identifier = not path.isfile(self.spool_path % '_'+fname) \
                     and not path.isfile(self.spool_path % fname) \
@@ -146,18 +152,14 @@ class ApplicationServices():
             with open(self.spool_path % '_'+fname, "a") as tmpfile:
                 tmpfile.write(data)
 
-            logger.debug("  chunk finished %s" % self._chktime(start_time))
+            logger.debug("%s  chunk finished %s" % (call_ref, self._chktime(start_time)))
             if is_last:
                 rename(self.spool_path % '_'+fname, self.spool_path % fname)
-                logger.debug("  file finished")
+                logger.debug("%s  file finished" % call_ref)
 
             return {'identifier': identifier}
 
-        except AccessException as e:
-            raise e
-        except NoidentException as e:
-            raise e
-        except NodataException as e:
+        except (AccessException, NoidentException, NodataException) as e:
             raise e
         except:
             import sys
@@ -167,94 +169,140 @@ class ApplicationServices():
                 exceptionType, exceptionValue, exceptionTraceback, limit=2, file=sys.stdout)
 
     def convert(self, data=False, identifier=False, in_mime=False, out_mime=False, username=None, password=None, client_id='Unknown'):
+        try:
+            rta = ExecutorWithTimeout().callWithTimeout(
+                100,
+                self._convert,
+                (data, identifier, in_mime, out_mime, username, password, client_id)
+            )
+            return rta
+        except TimeoutExeption as toe:
+            self._restart_ooo()
+            raise Exception('The file cannot be processed')
+        except Exception as e:
+            raise e
+
+    def _convert(self, data=False, identifier=False, in_mime=False, out_mime=False, username=None, password=None, client_id='Unknown'):
+        call_ref = str(uuid.uuid4()).replace("-", "")[:6]
         logger = logging.getLogger('main')
         start_time = time()
+        logger.debug('%s Convert File Solicitation from %s at %s: ' % (call_ref, client_id, datetime.now()))
 
         if data is not False:
             data = base64.b64decode(data)
-            logger.debug('Openning file from %s : ' % client_id)
+            logger.debug('%s Openning file from %s : ' % (call_ref, client_id))
         elif identifier is not False:
-            logger.debug('Openning identifier %s from %s :' % (identifier, client_id))
+            logger.debug('%s Openning identifier %s from %s :' % (call_ref, identifier, client_id))
             data = self._readFile(identifier)
         else:
             raise NoidentException('Wrong or no identifier.')
 
-        logger.debug("  read file %s" % self._chktime(start_time))
-        self._conn_healthy()
-        logger.debug("  connection test ok %s" % self._chktime(start_time))
+        logger.debug("%s  read file %s len %s" % (call_ref, self._chktime(start_time), convert_size(len(data))))
+
+        # Avoid to handle files with too many images.
+        inzip = zipfile.ZipFile(io.BytesIO(data), "r")
+        if len(inzip.namelist()) > 2175:
+            raise Exception('File with too many images')
+        inzip = None
+
+        star_office_client = self._conn_healthy()
+        if star_office_client == None:
+            raise Exception('Client Not available')
+
+        logger.debug("%s  connection test ok %s" % (call_ref, self._chktime(start_time)))
         infilter = filters.get(in_mime, False)
         outfilter = filters.get(out_mime, False)
-        self.star_office_client.putDocument(
+
+        star_office_client.putDocument(
             data, filter_name=infilter, read_only=True)
-        logger.debug("  upload document to office %s" %
-                     self._chktime(start_time))
+
+        logger.debug("%s  upload document to office %s" %
+                     (call_ref, self._chktime(start_time)))
 
         try:
-            conv_data = self.star_office_client.saveByStream(
+            conv_data = star_office_client.saveByStream(
                 filter_name=outfilter)
-            logger.debug("  download converted document %s" %
-                         self._chktime(start_time))
+            logger.debug("%s  download converted document %s" %
+                         (call_ref, self._chktime(start_time)))
         except Exception as e:
-            logger.debug("  conversion failed %s Exception: %s" %
-                         (self._chktime(start_time), str(e)))
-            self.star_office_client.closeDocument()
-            logger.debug("  emergency close document %s" %
-                         self._chktime(start_time))
+            logger.debug("%s  conversion failed %s Exception: %s" %
+                         (call_ref, self._chktime(start_time), str(e)))
+            star_office_client.closeDocument()
+            logger.debug("%s  emergency close document %s" %
+                         (call_ref, self._chktime(start_time)))
             raise e
         else:
-            self.star_office_client.closeDocument()
-            logger.debug("  close document %s" % self._chktime(start_time))
+            star_office_client.closeDocument()
+            logger.debug("%s  close document %s" % (call_ref, self._chktime(start_time)))
 
         return base64.b64encode(conv_data).decode('utf8')
 
     def join(self, idents, in_mime=False, out_mime=False, username=None, password=None, client_id='Unknown'):
+        call_ref = str(uuid.uuid4()).replace("-", "")[:6]
         logger = logging.getLogger('main')
-        logger.debug('Join %s identifiers: %s' %
-                     (str(len(idents)), str(idents)))
+        logger.debug('%s Join %s identifiers: %s' %
+                     (call_ref, str(len(idents)), str(idents)))
 
         start_time = time()
         ident = idents.pop(0)
         data = self._readFile(ident)
-        logger.debug("  read first file %s" % self._chktime(start_time))
+        logger.debug("%s  read first file %s" % (call_ref, self._chktime(start_time)))
 
-        self._conn_healthy()
-        logger.debug("  connection test ok %s" % self._chktime(start_time))
+        star_office_client = self._conn_healthy()
+        logger.debug("%s  connection test ok %s" % (call_ref, self._chktime(start_time)))
 
         try:
             infilter = filters.get(in_mime, False) or 'writer8'
             outfilter = filters.get(out_mime, False)
-            self.star_office_client.putDocument(
+            star_office_client.putDocument(
                 data, filter_name=infilter, read_only=True)
-            logger.debug("  upload first document to office %s" %
-                         self._chktime(start_time))
-            self.star_office_client.appendDocuments(
+            logger.debug("%s  upload first document to office %s" %
+                         (call_ref, self._chktime(start_time)))
+            star_office_client.appendDocuments(
                 self._readFiles(idents), filter_name=infilter)
-            result_data = self.star_office_client.saveByStream(outfilter)
+            result_data = star_office_client.saveByStream(outfilter)
         except Exception as e:
-            logger.debug("  conversion failed %s Exception: %s" %
-                         (self._chktime(start_time), str(e)))
-            self.star_office_client.closeDocument()
-            logger.debug("  emergency close document %s" %
-                         self._chktime(start_time))
+            logger.debug("%s  conversion failed %s Exception: %s" %
+                         (call_ref, self._chktime(start_time), str(e)))
+            star_office_client.closeDocument()
+            logger.debug("%s  emergency close document %s" %
+                         (call_ref, self._chktime(start_time)))
             raise e
         else:
-            self.star_office_client.closeDocument()
-            logger.debug("  close document %s" % self._chktime(start_time))
+            star_office_client.closeDocument()
+            logger.debug("%s  close document %s" % (call_ref, self._chktime(start_time)))
 
-        logger.debug("  join finished %s" % self._chktime(start_time))
+        logger.debug("%s  join finished %s" % (call_ref, self._chktime(start_time)))
         return base64.b64encode(result_data).decode('utf8')
 
-    def test(self, client_id='Unknown'):
-
+    def test(self, client_id=''):
         localPath = Path(__file__).resolve().absolute().with_name('test.odt')
         with open(localPath, "rb") as tmpfile:
             data = base64.b64encode(tmpfile.read()).decode('utf-8')
 
-        result = self.convert(data, in_mime='odt', out_mime='pdf')[:128]
-        # result = self.convert({'data': data, 'in_mime': 'odt', 'out_mime': 'pdf', 'client_info': 'self test'})[:128]
-
-        # if count(conv_data) < 4 or conv_data[:4] != b'%PDF':
-        if 'JVBERi0xLjcKJcOkw7zDtsOfCjIgMCBvYmoKPDwvTGVuZ3RoIDMgMCBSL0ZpbHRlci9GbGF0ZURlY29kZT4+CnN0cmVhbQp4nC2NPwvCMBTE9/cpbnZI3otNk0Io2D+C' == result:
+        result = self.convert(data, in_mime='odt', out_mime='pdf')[:4]
+        if 'JVBE' == result:  # b'%PDF' Check for magick words
             return {'status': 'ok', 'dig': result[:128]}
 
         raise Exception('Convertion failed')
+
+    def _restart_ooo(self):
+        logger = logging.getLogger('main')
+        if not self.soffice_restart_cmd:
+            logger.warning(
+                'No LibreOffice/OpenOffice restart script configured')
+            return False
+        logger.info(
+            'Restarting LibreOffice/OpenOffice background process')
+        try:
+            logger.info('Executing restart script "%s"' %
+                        self.soffice_restart_cmd)
+            subprocess.Popen(self.soffice_restart_cmd, start_new_session=True)
+            sleep(4)  # Let some time for LibO/OOO to be fully started
+        except OSError as e:
+            logger.error(
+                'Failed to execute the restart script. OS error: %s' % e)
+        except Exception as e:
+            logger.error(
+                'Failed to execute the restart script. General error: %s' % e)
+        return True

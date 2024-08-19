@@ -28,13 +28,15 @@
 #
 ################################################################################
 
+import os
 from pathlib import Path
-from wsgiref.simple_server import make_server
+from socketserver import ThreadingMixIn
+from wsgiref.simple_server import WSGIRequestHandler, WSGIServer, make_server
 import logging
 import sys
 from os import mkdir
 
-from ApplicationServices import ApplicationServices
+from AerooServices import AerooServices
 from Cleaner import Cleaner
 from ExtendedJsonRpcApplication import ExtendedJsonRpcApplication
 
@@ -47,40 +49,45 @@ def changeLogLevel(verbose: bool, client_id: str):
     return {'rta': 'changed'}
 
 
+class ThreadingWSGIServer(ThreadingMixIn, WSGIServer):
+    pass
+
+
 def main():
     logger = logging.getLogger('main')
     logger.addHandler(logging.StreamHandler())
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
+
+    if os.environ.get('ENABLE_SPOOL_DIRECTORY', 'false') == 'true':
+        try:
+            if not Path(SPOOL_DIRECTORY).is_dir():
+                mkdir(SPOOL_DIRECTORY)
+        finally:
+            pass
+        # Cleaner
+        cleaner = Cleaner()
+        cleaner.setDaemon(True)
+        cleaner.start()
 
     try:
-        if not Path(SPOOL_DIRECTORY).is_dir():
-            mkdir(SPOOL_DIRECTORY)
-    finally:
-        pass
-
-    # Cleaner
-    cleaner = Cleaner()
-    cleaner.setDaemon(True)
-    cleaner.start()
-
-    try:
-        appServices = ApplicationServices(spool_directory=SPOOL_DIRECTORY)
+        aerooServices = AerooServices(spool_directory=SPOOL_DIRECTORY,
+                                      soffice_restart_cmd="/usr/local/bin/officeLauncher.sh")
     except Exception as e:
         logger.error('failed to create the ApplicationServices ')
         logger.error(str(e))
         return e
 
     interfaces = {
-        'convert': appServices.convert,
-        'upload': appServices.upload,
-        'join': appServices.join,
-        'test': appServices.test,
+        'convert': aerooServices.convert,
+        'upload': aerooServices.upload,
+        'join': aerooServices.join,
+        'test': aerooServices.test,
         'log': changeLogLevel
     }
 
     app = ExtendedJsonRpcApplication(rpcs=interfaces)
     try:
-        httpd = make_server("0.0.0.0", 8989, app)
+        httpd = make_server("0.0.0.0", 8989, app, ThreadingWSGIServer, WSGIRequestHandler)
     except OSError as e:
         logger.error('failed to create the server ')
         if e.errno == 98:
