@@ -5,7 +5,7 @@
 Antes de utilizar el debug, se debe correr libreoffice en la consola.
 
 ```sh
-libreoffice24.2 \
+libreoffice25.2 \
     --invisible \
     --norestore \
     --headless \
@@ -34,6 +34,6 @@ libreoffice24.2 \
 ## Build and upload
 
 ```sh
-docker build -t adhoc/aeroo-docs:9.5 -f docker/p.dockerfile .
-docker push adhoc/aeroo-docs:9.5
+docker build -t adhoc/aeroo-docs:9.6 -f docker/p.dockerfile .
+docker push adhoc/aeroo-docs:9.6
 ```

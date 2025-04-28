@@ -7,7 +7,7 @@ if [ -f $PIDFILE ]; then
     rm -f $PIDFILE
 fi
 
-nohup libreoffice24.2 \
+nohup libreoffice25.2 \
     --invisible \
     --norestore \
     --headless \

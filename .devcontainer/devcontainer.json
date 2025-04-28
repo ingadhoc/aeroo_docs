@@ -24,9 +24,9 @@
                         "*.Dockerfile.dockerignore": true
                     },
 
-                    "python.defaultInterpreterPath": "/opt/libreoffice24.2/program/python",
-                    "python.pipenvPath": "/opt/libreoffice24.2/program/python-core-3.8.19/bin",
-                    "python.pythonPath": "/opt/libreoffice24.2/program/python",
+                    "python.defaultInterpreterPath": "/opt/libreoffice25.2/program/python",
+                    "python.pipenvPath": "/opt/libreoffice25.2/program/python-core-3.10.16/bin",
+                    "python.pythonPath": "/opt/libreoffice25.2/program/python",
                     "python.languageServer": "Pylance",
                     "python.linting.enabled": true,
                     "python.linting.pylintEnabled": true,

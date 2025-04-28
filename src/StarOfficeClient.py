@@ -148,6 +148,17 @@ class StarOfficeClient:
         properties.update({'ReadOnly': read_only})
         properties.update({'MacroExecutionMode': MacroExecMode.NEVER_EXECUTE})
         properties.update({'RepairPackage': True})
+        # This lines removes all backgrounds images
+        properties.update({'PrintBackground': False})
+        properties.update({'PrintPageBackground': False})
+        # properties.update({'PrintGraphics': False})
+        # Opciones para gra
+        # PrintBackground: Controla si se imprimen los fondos (imágenes, colores de fondo).
+        # PrintAnnotations: Define si se imprimen las anotaciones.
+        # PrintDrawings: Controla si se imprimen los dibujos o gráficos.
+        # PrintPageBackground: Controla si se imprime el fondo de la página.
+        # PrintBlackFonts: Imprime las fuentes en negro, independientemente del color original.
+        # CopyCount: Define cuántas copias se van a imprimir.
 
         # TODO Minor performance improvement by supplying MediaType property
         # properties.update({'MediaType':'application/vnd.oasis.opendocument.text'})
@@ -175,6 +186,11 @@ class StarOfficeClient:
             traceback.print_exception(exceptionType, exceptionValue,
                                       exceptionTraceback, limit=2, file=sys.stdout)
         inputStream.closeInput()
+
+        # Ver opciones disponibles
+        # prop_set_info = self.document.getPropertySetInfo()
+        # for prop in prop_set_info.getProperties():
+        #     print(f"Propiedad: {prop.Name}")
 
     def closeDocument(self):
         if hasattr(self, 'document'):

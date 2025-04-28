@@ -1,3 +1,5 @@
+# Notes
+
 ```sh
 # Forcing Different VCL Plugins No Plugin
 # The SAL_USE_VCLPLUGIN environment variable allows you to specify which Visual Component Library (VCL) plugin LibreOffice should use.
@@ -15,7 +17,7 @@ export SAL_NO_ACCESSIBILITY=1
 export SAL_USE_HEADLESS=true
 # Set to nonempty value to disable native widget rendering. Widgets will be painted with the generic vcl methods.
 export SAL_NO_NWF=true
-# 	If set this stops the recovery dialog prompting you as AOo starts up - instead the recovery files are just silently accumulated.
+# If set this stops the recovery dialog prompting you as AOo starts up - instead the recovery files are just silently accumulated.
 export OOO_DISABLE_RECOVERY=1
 # Override the desktop detection (also implies usage of the appropriate plugin, see SAL_USE_VCLPLUGIN). Possible values: "kde" (KDE), "gnome" (Gnome), "none" (other)
 export OOO_FORCE_DESKTOP=none
@@ -34,7 +36,7 @@ export EMF_PLUS_DISABLE=1
 export EMF_PLUS_LIMIT=1
 
 # Create the config
-libreoffice24.2 -env:UserInstallation=file:///tmp/so-profile --headless --terminate_after_init
+libreoffice25.2 -env:UserInstallation=file:///tmp/so-profile --headless --terminate_after_init
 
 
 nano /tmp/so-profile/user/registrymodifications.xcu
@@ -48,7 +50,7 @@ nano /tmp/so-profile/user/config/javasettings_Linux_X86_64.xml
 
 libreoffice --headless --convert-to pdf src/test.odt -env:UserInstallation=file:///tmp/so-profile
 
-libreoffice24.2 \
+libreoffice25.2 \
     --invisible \
     --minimized \
     --headless \
@@ -56,7 +58,7 @@ libreoffice24.2 \
     --nofirststartwizard \
     --convert-to pdf src/test.odt \
 
-libreoffice24.2 \
+libreoffice25.2 \
     --invisible \
     --minimized \
     --headless \
@@ -67,17 +69,14 @@ libreoffice24.2 \
 
 ```
 
-
-
+## Profile
 
 ```sh
 
 # Creamos el profile
-libreoffice24.2 -env:UserInstallation=file:///tmp/so-profile --headless --terminate_after_init
+libreoffice25.2 -env:UserInstallation=file:///tmp/so-profile --headless --terminate_after_init
 
-
-
-libreoffice24.2 \
+libreoffice25.2 \
     --invisible \
     --minimized \
     --norestore \

@@ -18,4 +18,4 @@ services:
 networks:
   adhoc:
     external: true
-    name: adhoc-17
+    name: adhoc

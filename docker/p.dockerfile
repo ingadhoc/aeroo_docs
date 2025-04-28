@@ -4,7 +4,7 @@ EXPOSE 8989
 
 WORKDIR /tmp
 
-ENV PATH="$PATH:/opt/libreoffice24.2/program/python-core-3.8.19/bin"
+ENV PATH="$PATH:/opt/libreoffice25.2/program/python-core-3.10.16/bin"
 
 RUN apt-get update \
     && apt-get install --no-install-recommends -y -q \
@@ -13,16 +13,16 @@ RUN apt-get update \
         default-jre \
         libxinerama1 libnss3 libdbus-1-3 libxml2 libcairo2 libxslt1.1 libgio3.0-cil libcups2 libx11-xcb1 \
     # Install LibreOffice
-    && wget https://download.documentfoundation.org/libreoffice/stable/24.2.5/deb/x86_64/LibreOffice_24.2.5_Linux_x86-64_deb.tar.gz \
-    && tar -xzf LibreOffice_24.2.5_Linux_x86-64_deb.tar.gz \
-    && rm LibreOffice_24.2.5_Linux_x86-64_deb.tar.gz \
-    && dpkg -i LibreOffice_24.2.5*_Linux_x86-64_deb/DEBS/*.deb \
-    && rm -rf LibreOffice_24.2.5*_Linux_x86-64_deb \
+    && wget https://download.documentfoundation.org/libreoffice/stable/25.2.2/deb/x86_64/LibreOffice_25.2.2_Linux_x86-64_deb.tar.gz \
+    && tar -xzf LibreOffice_25.2.2_Linux_x86-64_deb.tar.gz \
+    && rm LibreOffice_25.2.2_Linux_x86-64_deb.tar.gz \
+    && dpkg -i LibreOffice_25.2.2*_Linux_x86-64_deb/DEBS/*.deb \
+    && rm -rf LibreOffice_25.2.2*_Linux_x86-64_deb \
     # Install PIP
     && wget https://bootstrap.pypa.io/get-pip.py \
-    && /opt/libreoffice24.2/program/python get-pip.py \
+    && /opt/libreoffice25.2/program/python get-pip.py \
     && rm -f get-pip.py \
-    && /opt/libreoffice24.2/program/python -m pip install --no-cache-dir jsonrpc2 \
+    && /opt/libreoffice25.2/program/python -m pip install --no-cache-dir jsonrpc2 \
     # Clean
     && apt-get purge -y -q wget \
     && apt-get clean \
