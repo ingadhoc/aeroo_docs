@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Iniciar el script de Python
-/opt/libreoffice25.2/program/python /app/main.py &
+/opt/libreoffice${OO_VERSION}/program/python /app/main.py &
 
 # Esperar a que los procesos terminen
 wait -n

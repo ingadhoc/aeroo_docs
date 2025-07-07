@@ -1,6 +1,6 @@
 {
-    "python.defaultInterpreterPath": "/opt/libreoffice25.2/program/python",
-    "python.pipenvPath": "/opt/libreoffice25.2/program/python-core-3.10.16/bin",
+    "python.defaultInterpreterPath": "/opt/libreoffice24.8/program/python",
+    "python.pipenvPath": "/opt/libreoffice24.8/program/python-core-3.9.22/bin",
     "[python]": {
         "editor.defaultFormatter": "ms-python.autopep8",
         "editor.codeActionsOnSave": {
@@ -10,5 +10,7 @@
     },
     "autopep8.args": [
         "--max-line-length=120"
-    ]
+    ],
+    "python.analysis.languageServerMode": "full",
+
 }

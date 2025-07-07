@@ -7,7 +7,7 @@ class TimeoutExeption(Exception):
 
 
 class SharedObject(object):
-    response = None
+    response: str = ""
 
 
 class _Executor(threading.Thread):
@@ -25,7 +25,7 @@ class _Executor(threading.Thread):
 class ExecutorWithTimeout:
     shared_obj = SharedObject()
 
-    def callWithTimeout(self, timeout_sec: int, callable: Callable, args: tuple):
+    def callWithTimeout(self, timeout_sec: int, callable: Callable, args: tuple) -> str:
         if timeout_sec <= 0:
             raise Exception("timeout_sec too short")
         process = _Executor(self.shared_obj, callable, args)
@@ -35,5 +35,5 @@ class ExecutorWithTimeout:
 
         if process.is_alive():
             raise TimeoutExeption('TimeOut')
-        else:
-            return self.shared_obj.response
+
+        return self.shared_obj.response

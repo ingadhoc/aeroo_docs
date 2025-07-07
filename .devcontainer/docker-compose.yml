@@ -2,8 +2,9 @@ services:
   dev_adhoc_doc:
     build:
       no_cache: false
-      dockerfile: docker/d.dockerfile
+      dockerfile: docker/dockerfile
       context: ../
+      target: dev
     container_name: dev_adhoc_doc
     hostname: dev_adhoc_doc
     env_file:

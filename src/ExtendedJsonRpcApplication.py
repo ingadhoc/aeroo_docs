@@ -27,7 +27,7 @@ class ExtendedJsonRpcApplication(JsonRpcApplication):
                 return []
 
             if 'error' in resdata:
-                if resdata['error'].get('code', GENERIC_APPLICATION_ERROR) == GENERIC_APPLICATION_ERROR:
+                if resdata['error'].get('code', GENERIC_APPLICATION_ERROR) == GENERIC_APPLICATION_ERROR:  # type: ignore
                     start_response('500 Internal Server Error', [('Content-Type', 'application/json')])
                     return [json.dumps(resdata).encode('utf-8')]
 
