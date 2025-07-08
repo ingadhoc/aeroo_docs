@@ -103,7 +103,7 @@ class StarOfficeClient:
         self.logger = logging.getLogger('main')
         self._ooo_restart_cmd = ooo_restart_cmd
         self.localContext = uno.getComponentContext()
-        self.serviceManager = self.localContext.ServiceManager
+        self.serviceManager = self.localContext.ServiceManager  # type: ignore
         resolvervector = "com.sun.star.bridge.UnoUrlResolver"
         self._resolver = self.serviceManager.createInstanceWithContext(
             resolvervector, self.localContext)
@@ -128,7 +128,7 @@ class StarOfficeClient:
             raise StarOfficeClientException(
                 "Not possible to accept on a local resource (%s)" % exception)
 
-    def putDocument(self, data, filter_name=False, read_only=False):
+    def putDocument(self, data, filter_name: str = "", read_only: bool = False):
         """
         Uploads document to office service
         """
@@ -149,10 +149,10 @@ class StarOfficeClient:
         properties.update({'MacroExecutionMode': MacroExecMode.NEVER_EXECUTE})
         properties.update({'RepairPackage': True})
         # This lines removes all backgrounds images
-        properties.update({'PrintBackground': False})
-        properties.update({'PrintPageBackground': False})
+        # properties.update({'PrintBackground': False})
+        # properties.update({'PrintPageBackground': False})
         # properties.update({'PrintGraphics': False})
-        # Opciones para gra
+        # Graphics options
         # PrintBackground: Controla si se imprimen los fondos (imágenes, colores de fondo).
         # PrintAnnotations: Define si se imprimen las anotaciones.
         # PrintDrawings: Controla si se imprimen los dibujos o gráficos.
@@ -201,13 +201,13 @@ class StarOfficeClient:
                 except DisposedException:
                     pass
 
-    def saveByStream(self, filter_name=None):
+    def saveByStream(self, filter_name: str):
         """
         Downloads document from office service
         """
         self._updateDocument()
         outputStream = OutputStreamWrapper(False)
-        properties = {"OutputStream": outputStream}
+        properties: dict[str, str | OutputStreamWrapper] = {"OutputStream": outputStream}
         properties.update({"FilterName": filter_name})
         if filter_name == 'Text - txt - csv (StarCalc)':
             properties.update({"FilterOptions": CSVFilterOptions})
@@ -224,7 +224,7 @@ class StarOfficeClient:
         outputStream.close()
         return openDocumentBytes
 
-    def appendDocuments(self, docs_iter, filter_name=False, preserve_styles=True):
+    def appendDocuments(self, docs_iter, filter_name: str = "", preserve_styles: bool = True):
         # Get first document list of styles
         stylefamilies = self.document.StyleFamilies
         pagestyles = stylefamilies.getByName('PageStyles')
@@ -300,7 +300,7 @@ class StarOfficeClient:
             document = self.desktop.loadComponentFromURL("private:factory/swriter", '_default', 0, ())
             document.close(True)
             return True
-        except DisposedException:
+        except DisposedException as e:
             self.logger.error(e)
             return False
         except Exception as e:

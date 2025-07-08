@@ -2,7 +2,7 @@
 #
 # Copyright (c) 2009-2014 Alistek ( http://www.alistek.com ) All Rights Reserved.
 #                    General contacts <info@alistek.com>
-# Copyleft (ↄ) 2024 Andrés Zacchino <az@adhoc.com.ar>
+# Copyleft (ↄ) 2024-2025 Andrés Zacchino <az@adhoc.inc>
 #
 # WARNING: This program as such is intended to be used by professional
 # programmers who take the whole responsability of assessing all potential
@@ -37,15 +37,19 @@ from random import randint
 import subprocess
 from time import sleep, time
 from os import path, rename
+from typing import Literal
 import uuid
 import zipfile
 from CallWithTimeout import ExecutorWithTimeout, TimeoutExeption
 from StarOfficeClient import StarOfficeClient, StarOfficeClientException
 from utils import convert_size
+import threading
+from functools import wraps
 
 MAXINT = 9223372036854775807
+MAX_IMAGES = 2175  # Maximum number of images allowed in a document
 
-filters = {
+filters: dict[str, str] = {
     'pdf': 'writer_pdf_Export',   # PDF - Portable Document Format
     'odt': 'writer8',  # ODF Text Document
     'ods': 'calc8',   # ODF Spreadsheet
@@ -71,7 +75,17 @@ class AccessException(Exception):
     pass
 
 
+def office_locked_method(method):
+    @wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._office_lock:
+            return method(self, *args, **kwargs)
+    return wrapper
+
+
 class AerooServices():
+
+    _office_lock = threading.Lock()
 
     spool_path: str = "/tmp/aeroo-docs/%s"
     star_office_client = None
@@ -112,7 +126,7 @@ class AerooServices():
         return '%s s' % str(round(time()-start_time, 6))
 
     def _readFile(self, ident):
-        with open(self.spool_path % self._md5(str(ident)), "r") as tmpfile:
+        with open(self.spool_path % self._md5(str(ident)), "rb") as tmpfile:
             data = tmpfile.read()
         return base64.b64decode(data)
 
@@ -125,7 +139,23 @@ class AerooServices():
                          (ident, self._chktime(start_time)))
             yield data
 
-    def upload(self, data=False, is_last=False, identifier=False, username=None, password=None, client_id='Unknown'):
+    @office_locked_method
+    def upload(self, data: str = "", is_last: bool = False, identifier: str = "", username: str = "", password: str = "", client_id: str = 'Unknown'):
+        """ Upload a file to the Aeroo Services spool directory.
+        This method handles the upload of a file, either by creating a new identifier or using an existing one.
+        Args:
+            data (str | False): The file data to upload, base64 encoded.
+            is_last (bool): Indicates if this is the last chunk of the file.
+            identifier (str | False): The identifier for the file. If not provided, a new identifier will be generated.
+            username (str): The username for authentication (not used in this context).
+            password (str): The password for authentication (not used in this context).
+            client_id (str): The ID of the client making the request, for logging purposes.
+        Returns:
+            dict: A dictionary containing the identifier of the uploaded file.
+        Raises:
+            NoidentException: If no identifier is provided and no data is given to generate one.
+            NodataException: If no data is provided for upload.
+        """
         call_ref = str(uuid.uuid4()).replace("-", "")[:6]
         logger = logging.getLogger('main')
         logger.debug('%s Upload identifier: %s from %s' % (call_ref, identifier, client_id))
@@ -134,7 +164,7 @@ class AerooServices():
             # NOTE:md5 conversion on file operations to prevent path injection attack
             if identifier and not path.isfile(self.spool_path % '_' + self._md5(str(identifier))):
                 raise NoidentException('Wrong or no identifier.')
-            elif data is False:
+            elif data == "":
                 raise NodataException('No data to be converted.')
 
             fname = ''
@@ -144,9 +174,8 @@ class AerooServices():
                 fname = self._md5(str(new_ident))
                 logger.debug('%s  assigning new identifier %s' % (call_ref, new_ident))
                 # check if there is any other such files
-                identifier = not path.isfile(self.spool_path % '_'+fname) \
-                    and not path.isfile(self.spool_path % fname) \
-                    and new_ident or False
+                identifier = str(new_ident) if not path.isfile(self.spool_path % '_'+fname) \
+                    and not path.isfile(self.spool_path % fname) else ""
 
             fname = fname or self._md5(str(identifier))
             with open(self.spool_path % '_'+fname, "a") as tmpfile:
@@ -168,7 +197,37 @@ class AerooServices():
             traceback.print_exception(
                 exceptionType, exceptionValue, exceptionTraceback, limit=2, file=sys.stdout)
 
-    def convert(self, data=False, identifier=False, in_mime=False, out_mime=False, username=None, password=None, client_id='Unknown'):
+    @office_locked_method
+    def convert(self, data: str = "", identifier: str = "", in_mime: str = "odt", out_mime: str = "pdf", username: str = "", password: str = "", client_id: str = 'Unknown') -> str:
+        """ Convert a file from one format to another using LibreOffice/OpenOffice.
+
+        This method provides a timeout mechanism to ensure that the conversion process does not hang indefinitely.
+
+        Args:
+            data (str | Buffer): The file data to convert, base64 encoded.
+            identifier (str): The identifier of the file to convert.
+            in_mime (str | False): The input MIME type of the file.
+            out_mime (str | False): The output MIME type to convert to.
+            username (str): The username for authentication (not used in this context).
+            password (str): The password for authentication (not used in this context).
+            client_id (str): The ID of the client making the request, for logging purposes.
+        Returns:
+            str: The base64 encoded converted file data.
+        Raises:
+            NoidentException: If no identifier is provided or the identifier is invalid.
+            Exception: If the file conversion fails or if the file has too many images.
+        Logs:
+            Logs the process of converting the file, including start time, file reading, connection status,
+            upload, conversion, and download of the converted document.
+            Uses a unique call reference for each operation to trace logs.
+        Notes:
+            - The method reads the file data either from the provided data or from a file identified by
+              the identifier.
+            - It checks the number of images in the file to avoid processing files with too many images.
+            - It uses a StarOfficeClient to handle the connection to LibreOffice/OpenOffice for conversion.
+            - The method is decorated with `office_locked_method` to ensure thread safety when accessing
+              the office client.
+        """
         try:
             rta = ExecutorWithTimeout().callWithTimeout(
                 100,
@@ -182,26 +241,53 @@ class AerooServices():
         except Exception as e:
             raise e
 
-    def _convert(self, data=False, identifier=False, in_mime=False, out_mime=False, username=None, password=None, client_id='Unknown'):
+    def _convert(self, data: str = "", identifier: str = "", in_mime: str = "writer8", out_mime: str = "writer8", username: str = "", password: str = "", client_id: str = 'Unknown') -> str:
+        """ Convert a file from one format to another using LibreOffice/OpenOffice.
+        Args:
+            data (str | ReadableBuffer): The file data to convert, base64 encoded.
+            identifier (str): The identifier of the file to convert.
+            in_mime (str | False): The input MIME type of the file.
+            out_mime (str | False): The output MIME type to convert to.
+            username (str): The username for authentication (not used in this context).
+            password (str): The password for authentication (not used in this context).
+            client_id (str): The ID of the client making the request, for logging purposes.
+        Returns:
+            str: The base64 encoded converted file data.
+        Raises:
+            NoidentException: If no identifier is provided or the identifier is invalid.
+            Exception: If the file conversion fails or if the file has too many images.
+        Logs:
+            Logs the process of converting the file, including start time, file reading, connection status,
+            upload, conversion, and download of the converted document.
+            Uses a unique call reference for each operation to trace logs.
+        Notes:
+            - The method reads the file data either from the provided data or from a file identified by
+              the identifier.
+            - It checks the number of images in the file to avoid processing files with too many images.
+            - It uses a StarOfficeClient to handle the connection to LibreOffice/OpenOffice for conversion.
+            - The method is decorated with `office_locked_method` to ensure thread safety when accessing
+              the office client.
+        """
+
         call_ref = str(uuid.uuid4()).replace("-", "")[:6]
         logger = logging.getLogger('main')
         start_time = time()
         logger.debug('%s Convert File Solicitation from %s at %s: ' % (call_ref, client_id, datetime.now()))
 
-        if data is not False:
-            data = base64.b64decode(data)
+        if data != "":
+            b_data = base64.b64decode(data)
             logger.debug('%s Openning file from %s : ' % (call_ref, client_id))
-        elif identifier is not False:
+        elif identifier != "":
             logger.debug('%s Openning identifier %s from %s :' % (call_ref, identifier, client_id))
-            data = self._readFile(identifier)
+            b_data = self._readFile(identifier)
         else:
             raise NoidentException('Wrong or no identifier.')
 
-        logger.debug("%s  read file %s len %s" % (call_ref, self._chktime(start_time), convert_size(len(data))))
+        logger.debug("%s  read file %s len %s" % (call_ref, self._chktime(start_time), convert_size(len(b_data))))
 
         # Avoid to handle files with too many images.
-        inzip = zipfile.ZipFile(io.BytesIO(data), "r")
-        if len(inzip.namelist()) > 2175:
+        inzip = zipfile.ZipFile(io.BytesIO(b_data), "r")
+        if len(inzip.namelist()) > MAX_IMAGES:
             raise Exception('File with too many images')
         inzip = None
 
@@ -210,11 +296,12 @@ class AerooServices():
             raise Exception('Client Not available')
 
         logger.debug("%s  connection test ok %s" % (call_ref, self._chktime(start_time)))
-        infilter = filters.get(in_mime, False)
-        outfilter = filters.get(out_mime, False)
+
+        infilter = filters.get(in_mime, "writer8")
+        outfilter = filters.get(out_mime, "writer8")
 
         star_office_client.putDocument(
-            data, filter_name=infilter, read_only=True)
+            b_data, filter_name=infilter, read_only=True)
 
         logger.debug("%s  upload document to office %s" %
                      (call_ref, self._chktime(start_time)))
@@ -237,7 +324,17 @@ class AerooServices():
 
         return base64.b64encode(conv_data).decode('utf8')
 
-    def join(self, idents, in_mime=False, out_mime=False, username=None, password=None, client_id='Unknown'):
+    @office_locked_method
+    def join(self, idents: list[str], in_mime: str = 'writer8', out_mime: str = "writer_pdf_Export", username: str = "", password: str = "", client_id: str = 'Unknown'):
+        """ Join multiple files into one document using LibreOffice/OpenOffice.
+        Args:
+            idents (list): List of identifiers for the files to join.
+            in_mime (str | False): The input MIME type of the files.
+            out_mime (str | False): The output MIME type to convert to.
+            username (str): The username for authentication (not used in this context).
+            password (str): The password for authentication (not used in this context).
+            client_id (str): The ID of the client making the request, for logging purposes.
+        """
         call_ref = str(uuid.uuid4()).replace("-", "")[:6]
         logger = logging.getLogger('main')
         logger.debug('%s Join %s identifiers: %s' %
@@ -252,8 +349,8 @@ class AerooServices():
         logger.debug("%s  connection test ok %s" % (call_ref, self._chktime(start_time)))
 
         try:
-            infilter = filters.get(in_mime, False) or 'writer8'
-            outfilter = filters.get(out_mime, False)
+            infilter = filters.get(in_mime, 'writer8') if in_mime else 'writer8'
+            outfilter = filters.get(out_mime, "writer_pdf_Export") if out_mime else "writer_pdf_Export"
             star_office_client.putDocument(
                 data, filter_name=infilter, read_only=True)
             logger.debug("%s  upload first document to office %s" %
@@ -275,18 +372,25 @@ class AerooServices():
         logger.debug("%s  join finished %s" % (call_ref, self._chktime(start_time)))
         return base64.b64encode(result_data).decode('utf8')
 
-    def test(self, client_id=''):
+    def test(self, client_id: str = ''):
+        """ Test the connection to LibreOffice/OpenOffice by converting a test ODT file to PDF.
+        """
         localPath = Path(__file__).resolve().absolute().with_name('test.odt')
+        data: str = ''
         with open(localPath, "rb") as tmpfile:
             data = base64.b64encode(tmpfile.read()).decode('utf-8')
 
-        result = self.convert(data, in_mime='odt', out_mime='pdf')[:4]
+        result = self.convert(data, in_mime='odt', out_mime='pdf', client_id="unknown tester")[:4]
         if 'JVBE' == result:  # b'%PDF' Check for magick words
             return {'status': 'ok', 'dig': result[:128]}
 
         raise Exception('Convertion failed')
 
     def _restart_ooo(self):
+        """ Restart the LibreOffice/OpenOffice background process using a configured script.
+        This method attempts to execute a restart script defined in the `soffice_restart_cmd`
+        attribute.
+        """
         logger = logging.getLogger('main')
         if not self.soffice_restart_cmd:
             logger.warning(

@@ -28,13 +28,12 @@
 #
 ################################################################################
 
-import os
 from pathlib import Path
 from socketserver import ThreadingMixIn
 from wsgiref.simple_server import WSGIRequestHandler, WSGIServer, make_server
 import logging
 import sys
-from os import mkdir
+from os import environ
 
 from AerooServices import AerooServices
 from Cleaner import Cleaner
@@ -58,15 +57,11 @@ def main():
     logger.addHandler(logging.StreamHandler())
     logger.setLevel(logging.DEBUG)
 
-    if os.environ.get('ENABLE_SPOOL_DIRECTORY', 'false') == 'true':
-        try:
-            if not Path(SPOOL_DIRECTORY).is_dir():
-                mkdir(SPOOL_DIRECTORY)
-        finally:
-            pass
+    if environ.get('ENABLE_SPOOL_DIRECTORY', 'false') == 'true':
+        Path.mkdir(Path(SPOOL_DIRECTORY), parents=True, exist_ok=True)
         # Cleaner
         cleaner = Cleaner()
-        cleaner.setDaemon(True)
+        cleaner.daemon = True
         cleaner.start()
 
     try:
@@ -75,7 +70,7 @@ def main():
     except Exception as e:
         logger.error('failed to create the ApplicationServices ')
         logger.error(str(e))
-        return e
+        sys.exit(1)
 
     interfaces = {
         'convert': aerooServices.convert,
@@ -86,13 +81,23 @@ def main():
     }
 
     app = ExtendedJsonRpcApplication(rpcs=interfaces)
+
+    # WSGI requires the app to return bytes, so wrap if necessary
+    def wsgi_app(environ, start_response):
+        result = app(environ, start_response)
+        for item in result:
+            if isinstance(item, str):
+                yield item.encode('utf-8')
+            else:
+                yield item
+
     try:
-        httpd = make_server("0.0.0.0", 8989, app, ThreadingWSGIServer, WSGIRequestHandler)
+        httpd = make_server("0.0.0.0", 8989, wsgi_app, ThreadingWSGIServer, WSGIRequestHandler)
     except OSError as e:
         logger.error('failed to create the server ')
         if e.errno == 98:
-            logger.error('Address allready in use, :8989 is occupied.')
-        sys.exit()
+            logger.error('Address already in use, :8989 is occupied.')
+        sys.exit(1)
 
     logger.info('Server started')
 
@@ -100,7 +105,7 @@ def main():
         httpd.serve_forever()
     except KeyboardInterrupt as e:
         logger.info('Adhoc DOCS process interrupted.')
-        sys.exit()
+        sys.exit(0)
 
 
 if __name__ == "__main__":

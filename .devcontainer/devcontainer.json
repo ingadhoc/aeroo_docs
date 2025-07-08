@@ -11,22 +11,22 @@
             "settings": {
 
                     "cSpell.language": "en,es",
-                    "files.exclude": {
-                        "**/*.code-search": true,
-                        ".devcontainer": true,
-                        "docker": true,
-                        "*.Dockerfile.dockerignore": true
-                    },
-                    "search.exclude":{
-                        "**/*.code-search": true,
-                        ".devcontainer": true,
-                        "docker": true,
-                        "*.Dockerfile.dockerignore": true
-                    },
+                    // "files.exclude": {
+                    //     "**/*.code-search": true,
+                    //     ".devcontainer": true,
+                    //     "docker": true,
+                    //     "*.Dockerfile.dockerignore": true
+                    // },
+                    // "search.exclude":{
+                    //     "**/*.code-search": true,
+                    //     ".devcontainer": true,
+                    //     "docker": true,
+                    //     "*.Dockerfile.dockerignore": true
+                    // },
 
-                    "python.defaultInterpreterPath": "/opt/libreoffice25.2/program/python",
-                    "python.pipenvPath": "/opt/libreoffice25.2/program/python-core-3.10.16/bin",
-                    "python.pythonPath": "/opt/libreoffice25.2/program/python",
+                    // "python.defaultInterpreterPath": "/opt/libreoffice25.2/program/python",
+                    // "python.pipenvPath": "/opt/libreoffice25.2/program/python-core-3.10.16/bin",
+                    // "python.pythonPath": "/opt/libreoffice25.2/program/python",
                     "python.languageServer": "Pylance",
                     "python.linting.enabled": true,
                     "python.linting.pylintEnabled": true,
@@ -37,6 +37,7 @@
                     "python.analysis.inlayHints.pytestParameters": true,
                     "python.analysis.regenerateStdLibIndices": true,
                     "python.analysis.autoFormatStrings": true,
+                    "python.analysis.languageServerMode": "full",
                     "autopep8.args": [
                         "--max-line-length=120"
                     ],
@@ -53,7 +54,8 @@
                 "extensions": [
 					"ms-python.python",
 					"shardulm94.trailing-spaces",
-					"ms-python.autopep8"
+					"ms-python.autopep8",
+                    "ms-python.vscode-pylance"
 				]
             }
         },
